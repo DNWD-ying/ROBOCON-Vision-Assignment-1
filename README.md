@@ -2,8 +2,6 @@
 
 ## 1. System Information
 
-本部分全部通过命令行采集，未使用图形界面。以下命令与输出均为原样复制。
-
 ### 1.1 操作系统与内核
 
 ```bash
@@ -173,6 +171,150 @@ CUDA Toolkit:           N/A (未安装, nvcc 不存在)
 ```
 
 ## 2. Python Project A
+
+### 2.1 准备工作：安装 Conda
+
+本机原本没有 Conda，先安装 Miniconda（用户级安装，不需要 sudo）：
+
+```bash
+curl -fL -o /tmp/miniconda.sh \
+  https://mirrors.tuna.tsinghua.edu.cn/anaconda/miniconda/Miniconda3-latest-Linux-x86_64.sh
+bash /tmp/miniconda.sh -b -p "$HOME/miniconda3"
+"$HOME/miniconda3/bin/conda" init bash
+```
+
+```text
+conda 26.7.1
+```
+
+由于到 `repo.anaconda.com` 的速度只有约 17 KB/s，安装包改从清华镜像获取（约 4.6 MB/s）。
+conda 频道与 pip 索引也一并通过 `~/.condarc` 和 `~/.config/pip/pip.conf` 指向镜像：
+
+```yaml
+# ~/.condarc
+channels:
+  - conda-forge
+channel_alias: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud
+default_channels: []
+show_channel_urls: true
+channel_priority: flexible
+```
+
+```ini
+# ~/.config/pip/pip.conf
+[global]
+index-url = https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
+trusted-host = mirrors.tuna.tsinghua.edu.cn
+timeout = 60
+```
+
+### 2.2 创建环境
+
+Project A 的 `pyproject.toml` 要求 `requires-python = ">=3.9,<3.11"`，
+而本机系统 Python 是 3.12.3，无法满足，因此必须使用 Conda 环境：
+
+```bash
+conda create -n robocon_a python=3.10 -y
+conda activate robocon_a
+python --version
+which python
+```
+
+```text
+Python 3.10.21
+/home/szc/miniconda3/envs/robocon_a/bin/python
+```
+
+`which python` 指向 conda 环境目录而不是 `/usr/bin/python3`，说明环境已正确激活。
+
+### 2.3 安装依赖
+
+```bash
+cd python_A
+pip install -r requirements.txt
+```
+
+```text
+Successfully installed numpy-1.26.4 opencv-python-4.11.0.86
+```
+
+版本核对（对照 `VERSION_REQUIREMENTS.md`）：
+
+| 依赖 | 实装版本 | 要求 | |
+|---|---|---|---|
+| Python | 3.10.21 | `>=3.9,<3.11` | ✅ |
+| NumPy | 1.26.4 | `>=1.26,<2.0` | ✅ |
+| OpenCV Python | 4.11.0.86 | `>=4.9,<5.0` | ✅ |
+
+### 2.4 运行
+
+```bash
+python camera.py --camera 0 --output raw_capture.mp4 --width 640 --height 480 --fps 30
+```
+
+程序连续运行约 33 秒后，在 OpenCV 窗口中按 `q` 退出。程序完整输出：
+
+```text
+================================================================
+ROBOCON Vision Assignment 1 - Python Project A
+PID:          86141
+PPID:         86133
+Python:       /home/szc/miniconda3/envs/robocon_a/bin/python
+Python ver.:  3.10.21
+Camera index: 0
+Raw output:   /home/szc/code/assignment2/ROBOCON-Vision-Assignment-1/python_A/raw_capture.mp4
+Keep this process running and inspect it from another terminal.
+Press q or ESC in an OpenCV window to exit.
+================================================================
+Actual stream: 640x480, writer FPS=30.00
+Saved raw video: /home/szc/code/assignment2/ROBOCON-Vision-Assignment-1/python_A/raw_capture.mp4
+Captured frames: 1000
+Elapsed time:    33.3 s
+Loop rate:       30.0 frame/s
+```
+
+程序启动时打印的 `PID` 与 `PPID` 供第 3 节 Process Observation 核对使用。
+
+### 2.5 输出视频
+
+```text
+raw_capture.mp4: 1000 帧, 30.00 fps, 640x480, 时长 33.3 s
+```
+
+运行时长 33.3 秒，满足"连续运行至少 30 秒"的要求。
+
+验证该视频确实是**未经处理的原始画面**（而非灰度或轮廓结果）：抽查第 0、500、999 帧的
+B/G/R 三通道均值，三通道存在明显差异，说明是彩色帧：
+
+```text
+帧   0 可读=True B/G/R=92.4/104.8/104.1 彩差=12.4
+帧 500 可读=True B/G/R=117.5/125.6/121.3 彩差=8.1
+帧 999 可读=True B/G/R=119.9/127.5/123.0 彩差=7.7
+```
+
+若保存的是灰度图或轮廓图，三通道均值会几乎相等（彩差接近 0）。
+源码中 `writer.write(frame)` 位于 `process_frame()` 之前，也保证了写入的是原始帧。
+
+视频文件较大（13 MB），按 `.gitignore` 规则未提交到 Git，本地路径为
+`python_A/raw_capture.mp4`。
+
+### 2.6 图像结果截图
+
+![Project A 三个窗口](assets/python_a/project_a_windows.png)
+
+`assets/python_a/project_a_windows.png`
+
+三个窗口来自**同一次运行**的 Project A，从左到右分别是：
+
+```text
+Project A - Original    原始图像
+Project A - Grayscale   灰度图像
+Project A - Contours    轮廓处理图像
+```
+
+截图说明：OpenCV 窗口默认以层叠方式出现，会互相遮挡，因此运行期间把三个窗口横向平铺
+（窗口本身不支持缩放，`WINDOW_AUTOSIZE` 设定了固定尺寸提示，故用 `--width 640 --height 480`
+让三个窗口能够并排放下）。
 
 ## 3. Process Observation
 
