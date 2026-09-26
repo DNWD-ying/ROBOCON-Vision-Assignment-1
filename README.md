@@ -185,6 +185,8 @@ bash /tmp/miniconda.sh -b -p "$HOME/miniconda3"
 conda 26.7.1
 ```
 
+镜像配置（加速下载，非作业要求）：
+
 ```yaml
 # ~/.condarc
 channels:
