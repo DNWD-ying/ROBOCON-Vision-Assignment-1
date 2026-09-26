@@ -1011,4 +1011,163 @@ md5sum video_processor build/video_processor
 
 ## 7. Git / GitHub
 
+### 7.1 仓库信息
+
+```text
+GitHub: https://github.com/DNWD-ying/ROBOCON-Vision-Assignment-1
+远端:   git@github.com:DNWD-ying/ROBOCON-Vision-Assignment-1.git  (SSH, public)
+本地:   /home/szc/code/assignment2/ROBOCON-Vision-Assignment-1
+```
+
+```bash
+git remote -v
+```
+
+```text
+origin	git@github.com:DNWD-ying/ROBOCON-Vision-Assignment-1.git (fetch)
+origin	git@github.com:DNWD-ying/ROBOCON-Vision-Assignment-1.git (push)
+```
+
+### 7.2 实际执行过的命令
+
+**初始化仓库**（`-b main` 指定初始分支名为 main）：
+
+```bash
+git init -b main
+git add -A
+git commit -m "chore: 初始化仓库骨架与 README 八大章节"
+```
+
+**创建并使用非 main 分支**。注意要先有至少一次提交，否则 `git branch` 会报
+`fatal: not a valid object name`：
+
+```bash
+git branch dev
+git switch dev
+```
+
+**连接远端并首次推送**，`-u` 用于建立跟踪关系，之后直接 `git push` 即可：
+
+```bash
+git remote add origin git@github.com:DNWD-ying/ROBOCON-Vision-Assignment-1.git
+git push -u origin main
+git push -u origin dev
+```
+
+**日常提交**（每个 Part 完成后各一次）：
+
+```bash
+git status
+git add README.md assets/<对应目录>
+git commit -m "docs: 完成 Part II Python Project A"
+git push
+```
+
+**查看状态与历史**：
+
+```bash
+git status
+git branch -vv
+git log --oneline --graph --all
+```
+
+**把 dev 的成果合并回主分支**：
+
+```bash
+git switch main
+git merge --no-ff dev -m "Merge branch 'dev' into main"
+git push origin main
+```
+
+### 7.3 提交历史
+
+```bash
+git log --oneline --graph --all
+```
+
+```text
+*   f832405 Merge branch 'dev' into main
+|\
+| * 766a091 docs: 完成 Part VI CMake 构建
+| * 7f3717e docs: 完成 Part V C++ 手工编译
+| * 483f0bc docs: 完成 Part IV Python Project B
+| * d0866e5 docs: 完成 Part III 进程观察
+| * f3087c2 docs: Part II 截图改用桌面 portal 抓取, 保留桌面壁纸
+| * 5a3e770 docs: 为 §2.1 的镜像配置补一句说明
+| * 6212cd5 docs: 重拍 Part II 截图, 排除桌面其它窗口干扰
+| * 97d8dbe docs: 完成 Part II Python Project A
+| * e8b60cd docs: 不再单独留档系统信息原始输出
+| * 846645b docs: 完成 Part I 系统信息采集
+|/
+* a527ae7 chore: 初始化仓库骨架与 README 八大章节
+* b692a57 Initial commit
+```
+
+`main` 分支上的 `f832405` 是一个**合并提交**，把 `dev` 上全部 11 次提交并入主分支，
+满足"非 main 分支上的修改最终回到主分支"这一条。
+
+```bash
+git branch -vv
+```
+
+```text
+* dev  766a091 [origin/dev]  docs: 完成 Part VI CMake 构建
+  main f832405 [origin/main] Merge branch 'dev' into main
+```
+
+### 7.4 一次实际的冲突处理
+
+创建 GitHub 仓库时勾选了 "Add a README file"，远端 `main` 上已有一个自动生成的
+`Initial commit`，与本地骨架提交**没有共同祖先**，直接推送会被拒。处理方式是把本地提交
+rebase 到远端那个提交之上：
+
+```bash
+git fetch origin main
+git rebase FETCH_HEAD
+# README.md 冲突 -> 保留作业要求的八章节版本
+git add README.md
+git rebase --continue
+```
+
+结果是远端那个 `Initial commit` 被完整保留在历史中，本地骨架提交接在它之后，
+没有使用 `--force` 覆盖远端历史。
+
+### 7.5 哪些文件没有提交
+
+`.gitignore` 的内容与作用：
+
+```text
+__pycache__/  *.py[cod]  *.egg-info/  .venv/      Python 缓存与虚拟环境
+.conda/  .vscode/  .idea/                         Conda 环境与 IDE 配置
+build/  cmake-build-*/  *.o  *.out                CMake 构建产物
+cpp/video_processor                               手工编译出的可执行文件
+*.mp4  *.avi                                      视频文件
+.DS_Store
+```
+
+重点是不能把 Conda 环境目录、`build/`、编译产物和大体积视频提交上去。
+验证忽略规则确实生效：
+
+```bash
+git check-ignore -v build/video_processor cpp/video_processor
+```
+
+```text
+.gitignore:13:build/              	build/video_processor
+.gitignore:17:cpp/video_processor 	cpp/video_processor
+```
+
+### 7.6 视频文件的本地路径
+
+三个 MP4 体积都超过 GitHub 建议大小，未上传，仅保留本地：
+
+| 文件 | 大小 | 本地路径 |
+|---|---|---|
+| Project A 原始视频 | 25 MB | `python_A/raw_capture.mp4` |
+| Project B 分析结果 | 106 MB | `python_B/advanced_analysis.mp4` |
+| C++ 处理结果 | 208 MB | `cpp/cpp_processed.mp4` |
+| C++ 处理结果（CMake 构建） | 208 MB | `cpp/build/cpp_from_cmake.mp4` |
+
+对应的关键画面已截图提交，见 `assets/python_a/`、`assets/python_b/`、`assets/cpp/`。
+
 ## 8. Problems and Notes
