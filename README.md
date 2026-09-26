@@ -315,6 +315,169 @@ Project A - Contours    轮廓处理图像
 
 ## 3. Process Observation
 
+Project A 启动时会打印自己的 PID 与 PPID：
+
+```text
+PID:          113359
+PPID:         113351
+```
+
+下面另开终端，**自己从系统里找出这个进程**再与上面的数字核对。
+
+### 3.1 查找过程
+
+按名字查找：
+
+```bash
+pgrep -af "camera.py"
+```
+
+```text
+113359 python camera.py --camera 0 --output raw_capture.mp4 --width 640 --height 480 --fps 30
+```
+
+（`pgrep -af` 会把启动它的那个 shell 一并匹配进来，上面只保留程序本身那一行。）
+
+`ps` 配合管道过滤，这种方式还能同时看到 PPID：
+
+```bash
+ps -ef | grep "camera.py" | grep -v grep
+```
+
+```text
+szc   113359  113351  99 18:33 ?  00:00:34 python camera.py --camera 0 --output raw_capture.mp4 --width 640 --height 480 --fps 30
+```
+
+还可以反过来按 CPU 占用排序，"谁在吃 CPU" 一眼就能看出来：
+
+```bash
+ps aux --sort=-%cpu | head -6
+```
+
+```text
+PID      %CPU   %MEM   STAT   TIME      COMMAND
+113359   247    0.4    Sl     0:34      python camera.py --camera 0 --output raw_capture.mp4 --width
+26952    15.4   0.9    Sl     11:51     /usr/share/code/code --type=renderer ...
+26047    6.6    0.5    Sl     5:06      /usr/share/code/code --type=gpu-process ...
+26069    6.0    1.2    Sl     4:38      /usr/share/code/code --type=renderer ...
+3825     5.8    1.2    Ssl    5:15      /usr/bin/gnome-shell
+```
+
+### 3.2 与程序打印的 PID 核对
+
+程序自己打印的是 `113359`，而系统里查到的 `camera.py` 进程号同样是 `113359`：
+
+```bash
+ps -p 113359 -o pid=,cmd=
+```
+
+```text
+113359 python camera.py --camera 0 --output raw_capture.mp4 --width 640 --height 480 --fps 30
+```
+
+两者一致，说明找到的就是 Project A 本身，而不是别的 Python 进程。
+
+### 3.3 观测指标
+
+```bash
+ps -o pid,ppid,%cpu,%mem,etime,nlwp,cmd -p 113359
+```
+
+```text
+    PID    PPID %CPU %MEM     ELAPSED NLWP CMD
+ 113359  113351  247  0.4       00:14   48 python camera.py --camera 0 --output raw_capture.mp4 --width 640 --height 480 --fps 30
+```
+
+| 项目 | 值 |
+|---|---|
+| PID | 113359 |
+| PPID | 113351 |
+| CMD | `python camera.py --camera 0 --output raw_capture.mp4 --width 640 --height 480 --fps 30` |
+| CPU % | 247（`ps` 的生命周期均值）／ 227.3（`top` 瞬时） |
+| MEM % | 0.4 |
+| 运行时间 | 00:14（该次采样时刻） |
+| 线程数 | 48（`NLWP`） |
+
+**关于 CPU % 超过 100**：这不是异常。`ps`/`top` 的 `%CPU` 是**按单个核心为 100%** 计算的，
+进程内部有 48 个线程并行跑（`NLWP` 一列），所以多核累加后超过 100% 属正常现象。
+
+`top` 单独取一次瞬时值：
+
+```bash
+top -b -n 1 -p 113359
+```
+
+```text
+ 进程号 USER      PR  NI    虚拟   驻留   共享    %CPU  %MEM     时间+ COMMAND
+ 113359 szc       20   0 3036060 149780 109420 R 227.3   0.5   0:35.43 python
+```
+
+### 3.4 进程树与线程
+
+```bash
+pstree -p 113359
+```
+
+```text
+python(113359)-+-{python}(113362)
+               |-{python}(113363)
+               |-{python}(113364)
+               ...
+```
+
+`pstree` 里 `{python}` 是线程（花括号表示线程，圆括号表示进程），
+逐个列出该进程的 48 个线程。也可以直接用 `ps` 的 `-L` 选项看：
+
+```bash
+ps -o pid,tid,comm -L -p 113359 | head -5
+```
+
+```text
+    PID     TID COMMAND
+ 113359  113359 python
+ 113359  113362 python
+ 113359  113363 python
+ 113359  113364 python
+```
+
+`PID` 一列全是 113359（同一个进程），`TID` 各不相同，说明确实是多线程。
+
+**PPID 会变化**：程序刚启动时 PPID 是 `113351`（启动它的那个 shell）；
+程序运行一段时间后再采样，PPID 变成了 `3390`（`systemd`）：
+
+```bash
+ps -o pid,ppid,%cpu,%mem,etime,nlwp,cmd -p 113359
+```
+
+```text
+    PID    PPID %CPU %MEM     ELAPSED NLWP CMD
+ 113359    3390  200  0.4       01:26   48 python camera.py --camera 0 --output raw_capture.mp4 --width 640 --height 480 --fps 30
+```
+
+原因是**原来那个父进程（shell）已经退出了**，`camera.py` 成为孤儿进程后被 init/systemd 收养
+（reparent）。这是一个正常的内核行为，不是程序的问题。
+
+### 3.5 htop 截图
+
+![htop](assets/process/htop.png)
+
+`assets/process/htop.png`
+
+截图内容说明：
+
+```text
+顶部 24 条 CPU 占用条            当前电脑各核心使用情况
+Mem: 6.94G/31.1G                内存占用
+Tasks: 171; 1551 thr; 351 kthr  任务数 / 线程数
+Load average: 1.75 0.96 0.95    系统负载
+进程列表                          python camera.py 及其各线程
+```
+
+htop 中按 `H` 开启了线程视图，因此 `python camera.py` 的 48 个线程会各自作为一行列出，
+可以看到主线程与各子线程分别占用的 CPU。
+
+截图时把三个 OpenCV 窗口以及其它无关窗口最小化，避免遮挡 htop。
+
 ## 4. Python Project B
 
 ## 5. C++ Manual Build
