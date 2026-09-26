@@ -2,15 +2,1012 @@
 
 ## 1. System Information
 
+### 1.1 操作系统与内核
+
+```bash
+cat /etc/os-release
+uname -r
+```
+
+```text
+PRETTY_NAME="Ubuntu 24.04.5 LTS"
+NAME="Ubuntu"
+VERSION_ID="24.04"
+VERSION="24.04.5 LTS (Noble Numbat)"
+VERSION_CODENAME=noble
+ID=ubuntu
+ID_LIKE=debian
+```
+
+```text
+7.0.0-34-generic
+```
+
+- Ubuntu 版本：**24.04.5 LTS (Noble Numbat)**
+- Kernel 版本：**7.0.0-34-generic**
+
+### 1.2 CPU
+
+```bash
+lscpu
+```
+
+关键字段：
+
+```text
+架构：                  x86_64
+CPU:                    24
+在线 CPU 列表：         0-23
+厂商 ID：               GenuineIntel
+型号名称：              Intel(R) Core(TM) i7-14650HX
+CPU 最大 MHz：          5200.0000
+CPU 最小 MHz：          800.0000
+每个核的线程数：        2
+每个座的核数：          16
+座：                    1
+L3 缓存：               30 MiB (1 instance)
+NUMA 节点：             1
+虚拟化：                VT-x
+```
+
+- CPU：**Intel(R) Core(TM) i7-14650HX**
+- 拓扑：1 socket × 16 core × 2 thread = **24 逻辑处理器**
+- 频率范围：800 MHz – 5200 MHz
+
+### 1.3 GPU 与内核驱动
+
+```bash
+lspci | grep -Ei 'vga|3d|display'
+```
+
+```text
+00:02.0 VGA compatible controller: Intel Corporation Raptor Lake-S UHD Graphics (rev 04)
+02:00.0 VGA compatible controller: NVIDIA Corporation Device 2f18 (rev a1)
+```
+
+```bash
+lspci -k | grep -EA3 'VGA|3D|Display'
+```
+
+```text
+00:02.0 VGA compatible controller: Intel Corporation Raptor Lake-S UHD Graphics (rev 04)
+	DeviceName: Onboard - Video
+	Subsystem: Tongfang Hongkong Limited Raptor Lake-S UHD Graphics
+	Kernel driver in use: i915
+--
+02:00.0 VGA compatible controller: NVIDIA Corporation Device 2f18 (rev a1)
+	Subsystem: Tongfang Hongkong Limited Device 604e
+	Kernel driver in use: nvidia
+	Kernel modules: nvidiafb, nouveau, nvidia_drm, nvidia
+```
+
+本机为**双显卡（混合显卡）**环境：
+
+| GPU | 设备 | 正在使用的内核驱动 |
+|---|---|---|
+| 集显 | Intel Raptor Lake-S UHD Graphics | `i915` |
+| 独显 | NVIDIA GeForce RTX 5070 Ti Laptop GPU | `nvidia` |
+
+注意 `Kernel modules` 一行列出 `nvidiafb, nouveau, nvidia_drm, nvidia` 表示内核中**存在**这些模块，
+而 `Kernel driver in use: nvidia` 表示当前**实际生效**的是 NVIDIA 专有驱动，不是开源的 `nouveau`。
+
+### 1.4 图形会话类型
+
+```bash
+echo "$XDG_SESSION_TYPE"
+echo "$DISPLAY"
+echo "$WAYLAND_DISPLAY"
+```
+
+```text
+XDG_SESSION_TYPE=x11
+DISPLAY=:1
+WAYLAND_DISPLAY=
+```
+
+- 图形会话类型：**X11**（`XDG_SESSION_TYPE=x11`）
+- `WAYLAND_DISPLAY` 为空，进一步确认当前不是 Wayland 会话
+
+这一项对 Project A 有实际影响：OpenCV 的 `cv2.imshow` 依赖图形会话才能弹出窗口，
+X11 下通过 `DISPLAY=:1` 正常显示。
+
+### 1.5 NVIDIA Driver 与 CUDA Toolkit
+
+```bash
+nvidia-smi
+```
+
+```text
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 595.91.07              Driver Version: 595.91.07      CUDA Version: 13.2     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 5070 ...    Off |   00000000:02:00.0 Off |                  N/A |
+| N/A   41C    P4             13W /   65W |      15MiB /  12227MiB |     24%      Default |
++-----------------------------------------+------------------------+----------------------+
+```
+
+```bash
+nvcc --version
+```
+
+```text
+/bin/bash: 行 76: nvcc: 未找到命令
+```
+
+- NVIDIA Driver：**595.91.07**
+- CUDA Toolkit：**N/A（未安装）**
+
+**必须区分的两点：**
+
+| 项目 | 值 | 含义 |
+|---|---|---|
+| NVIDIA Driver 支持的 CUDA 能力 | 13.2 | `nvidia-smi` 右上角显示的 `CUDA Version`，指这个驱动**最高能支持**的 CUDA 运行时版本，是驱动的能力上限 |
+| 实际安装的 CUDA Toolkit | 无 | `nvcc` 命令不存在，说明本机**没有安装** CUDA Toolkit |
+
+`nvidia-smi` 里的 `CUDA Version: 13.2` **不能**等价为"本机已经安装了 CUDA 13.2 的 Toolkit"。
+前者是驱动自带的能力声明，后者需要实际安装 `cuda-toolkit` 并具备 `nvcc` 编译器；
+本机只满足前者。
+
+对本 Assignment 而言，C++ 部分只需要 OpenCV 与 Eigen 的 CPU 版本，
+**不依赖 CUDA Toolkit**，因此这一项缺失不影响后续任务。
+
+### 1.6 汇总
+
+```text
+Ubuntu 版本:            24.04.5 LTS (Noble Numbat)
+Kernel 版本:            7.0.0-34-generic
+CPU:                    Intel(R) Core(TM) i7-14650HX, 16 核 / 24 线程
+GPU:                    Intel Raptor Lake-S UHD Graphics (集显)
+                        NVIDIA GeForce RTX 5070 Ti Laptop GPU (独显)
+GPU 正在使用的内核驱动:   i915 (Intel) / nvidia (NVIDIA)
+图形会话类型:            X11  (DISPLAY=:1, WAYLAND_DISPLAY 为空)
+NVIDIA Driver:          595.91.07
+CUDA Toolkit:           N/A (未安装, nvcc 不存在)
+内存:                   31 GiB
+架构:                   x86_64
+```
+
 ## 2. Python Project A
+
+### 2.1 准备工作：安装 Conda
+
+```bash
+curl -fL -o /tmp/miniconda.sh \
+  https://mirrors.tuna.tsinghua.edu.cn/anaconda/miniconda/Miniconda3-latest-Linux-x86_64.sh
+bash /tmp/miniconda.sh -b -p "$HOME/miniconda3"
+"$HOME/miniconda3/bin/conda" init bash
+```
+
+```text
+conda 26.7.1
+```
+
+镜像配置（加速下载，非作业要求）：
+
+```yaml
+# ~/.condarc
+channels:
+  - conda-forge
+channel_alias: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud
+default_channels: []
+show_channel_urls: true
+channel_priority: flexible
+```
+
+```ini
+# ~/.config/pip/pip.conf
+[global]
+index-url = https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
+trusted-host = mirrors.tuna.tsinghua.edu.cn
+timeout = 60
+```
+
+### 2.2 创建环境
+
+Project A 的 `pyproject.toml` 要求 `requires-python = ">=3.9,<3.11"`，
+而本机系统 Python 是 3.12.3，无法满足，因此必须使用 Conda 环境：
+
+```bash
+conda create -n robocon_a python=3.10 -y
+conda activate robocon_a
+python --version
+which python
+```
+
+```text
+Python 3.10.21
+/home/szc/miniconda3/envs/robocon_a/bin/python
+```
+
+`which python` 指向 conda 环境目录而不是 `/usr/bin/python3`，说明环境已正确激活。
+
+### 2.3 安装依赖
+
+```bash
+cd python_A
+pip install -r requirements.txt
+```
+
+```text
+Successfully installed numpy-1.26.4 opencv-python-4.11.0.86
+```
+
+版本核对（对照 `VERSION_REQUIREMENTS.md`）：
+
+| 依赖 | 实装版本 | 要求 | |
+|---|---|---|---|
+| Python | 3.10.21 | `>=3.9,<3.11` | ✅ |
+| NumPy | 1.26.4 | `>=1.26,<2.0` | ✅ |
+| OpenCV Python | 4.11.0.86 | `>=4.9,<5.0` | ✅ |
+
+### 2.4 运行
+
+```bash
+python camera.py --camera 0 --output raw_capture.mp4 --width 640 --height 480 --fps 30
+```
+
+程序连续运行约 33 秒后，在 OpenCV 窗口中按 `q` 退出。程序完整输出：
+
+```text
+================================================================
+ROBOCON Vision Assignment 1 - Python Project A
+PID:          86141
+PPID:         86133
+Python:       /home/szc/miniconda3/envs/robocon_a/bin/python
+Python ver.:  3.10.21
+Camera index: 0
+Raw output:   /home/szc/code/assignment2/ROBOCON-Vision-Assignment-1/python_A/raw_capture.mp4
+Keep this process running and inspect it from another terminal.
+Press q or ESC in an OpenCV window to exit.
+================================================================
+Actual stream: 640x480, writer FPS=30.00
+Saved raw video: /home/szc/code/assignment2/ROBOCON-Vision-Assignment-1/python_A/raw_capture.mp4
+Captured frames: 1000
+Elapsed time:    33.3 s
+Loop rate:       30.0 frame/s
+```
+
+程序启动时打印的 `PID` 与 `PPID` 供第 3 节 Process Observation 核对使用。
+
+### 2.5 输出视频
+
+```text
+raw_capture.mp4: 1000 帧, 30.00 fps, 640x480, 时长 33.3 s
+```
+
+运行时长 33.3 秒，满足"连续运行至少 30 秒"的要求。
+
+验证该视频确实是**未经处理的原始画面**（而非灰度或轮廓结果）：抽查第 0、500、999 帧的
+B/G/R 三通道均值，三通道存在明显差异，说明是彩色帧：
+
+```text
+帧   0 可读=True B/G/R=92.4/104.8/104.1 彩差=12.4
+帧 500 可读=True B/G/R=117.5/125.6/121.3 彩差=8.1
+帧 999 可读=True B/G/R=119.9/127.5/123.0 彩差=7.7
+```
+
+若保存的是灰度图或轮廓图，三通道均值会几乎相等（彩差接近 0）。
+源码中 `writer.write(frame)` 位于 `process_frame()` 之前，也保证了写入的是原始帧。
+
+视频文件较大（13 MB），按 `.gitignore` 规则未提交到 Git，本地路径为
+`python_A/raw_capture.mp4`。
+
+### 2.6 图像结果截图
+
+![Project A 三个窗口](assets/python_a/project_a_windows.png)
+
+`assets/python_a/project_a_windows.png`
+
+三个窗口来自**同一次运行**的 Project A，从左到右分别是：
+
+```text
+Project A - Original    原始图像
+Project A - Grayscale   灰度图像
+Project A - Contours    轮廓处理图像
+```
+
+截图说明：OpenCV 窗口默认以层叠方式出现，会互相遮挡，因此运行期间把三个窗口横向平铺
+（窗口本身不支持缩放，`WINDOW_AUTOSIZE` 设定了固定尺寸提示，故用 `--width 640 --height 480`
+让三个窗口能够并排放下）。截图时将其它无关窗口最小化，避免桌面上的其他内容干扰证据。
 
 ## 3. Process Observation
 
+Project A 启动时会打印自己的 PID 与 PPID：
+
+```text
+PID:          113359
+PPID:         113351
+```
+
+下面另开终端，**自己从系统里找出这个进程**再与上面的数字核对。
+
+### 3.1 查找过程
+
+按名字查找：
+
+```bash
+pgrep -af "camera.py"
+```
+
+```text
+113359 python camera.py --camera 0 --output raw_capture.mp4 --width 640 --height 480 --fps 30
+```
+
+（`pgrep -af` 会把启动它的那个 shell 一并匹配进来，上面只保留程序本身那一行。）
+
+`ps` 配合管道过滤，这种方式还能同时看到 PPID：
+
+```bash
+ps -ef | grep "camera.py" | grep -v grep
+```
+
+```text
+szc   113359  113351  99 18:33 ?  00:00:34 python camera.py --camera 0 --output raw_capture.mp4 --width 640 --height 480 --fps 30
+```
+
+还可以反过来按 CPU 占用排序，"谁在吃 CPU" 一眼就能看出来：
+
+```bash
+ps aux --sort=-%cpu | head -6
+```
+
+```text
+PID      %CPU   %MEM   STAT   TIME      COMMAND
+113359   247    0.4    Sl     0:34      python camera.py --camera 0 --output raw_capture.mp4 --width
+26952    15.4   0.9    Sl     11:51     /usr/share/code/code --type=renderer ...
+26047    6.6    0.5    Sl     5:06      /usr/share/code/code --type=gpu-process ...
+26069    6.0    1.2    Sl     4:38      /usr/share/code/code --type=renderer ...
+3825     5.8    1.2    Ssl    5:15      /usr/bin/gnome-shell
+```
+
+### 3.2 与程序打印的 PID 核对
+
+程序自己打印的是 `113359`，而系统里查到的 `camera.py` 进程号同样是 `113359`：
+
+```bash
+ps -p 113359 -o pid=,cmd=
+```
+
+```text
+113359 python camera.py --camera 0 --output raw_capture.mp4 --width 640 --height 480 --fps 30
+```
+
+两者一致，说明找到的就是 Project A 本身，而不是别的 Python 进程。
+
+### 3.3 观测指标
+
+```bash
+ps -o pid,ppid,%cpu,%mem,etime,nlwp,cmd -p 113359
+```
+
+```text
+    PID    PPID %CPU %MEM     ELAPSED NLWP CMD
+ 113359  113351  247  0.4       00:14   48 python camera.py --camera 0 --output raw_capture.mp4 --width 640 --height 480 --fps 30
+```
+
+| 项目 | 值 |
+|---|---|
+| PID | 113359 |
+| PPID | 113351 |
+| CMD | `python camera.py --camera 0 --output raw_capture.mp4 --width 640 --height 480 --fps 30` |
+| CPU % | 247（`ps` 的生命周期均值）／ 227.3（`top` 瞬时） |
+| MEM % | 0.4 |
+| 运行时间 | 00:14（该次采样时刻） |
+| 线程数 | 48（`NLWP`） |
+
+**关于 CPU % 超过 100**：这不是异常。`ps`/`top` 的 `%CPU` 是**按单个核心为 100%** 计算的，
+进程内部有 48 个线程并行跑（`NLWP` 一列），所以多核累加后超过 100% 属正常现象。
+
+`top` 单独取一次瞬时值：
+
+```bash
+top -b -n 1 -p 113359
+```
+
+```text
+ 进程号 USER      PR  NI    虚拟   驻留   共享    %CPU  %MEM     时间+ COMMAND
+ 113359 szc       20   0 3036060 149780 109420 R 227.3   0.5   0:35.43 python
+```
+
+### 3.4 进程树与线程
+
+```bash
+pstree -p 113359
+```
+
+```text
+python(113359)-+-{python}(113362)
+               |-{python}(113363)
+               |-{python}(113364)
+               ...
+```
+
+`pstree` 里 `{python}` 是线程（花括号表示线程，圆括号表示进程），
+逐个列出该进程的 48 个线程。也可以直接用 `ps` 的 `-L` 选项看：
+
+```bash
+ps -o pid,tid,comm -L -p 113359 | head -5
+```
+
+```text
+    PID     TID COMMAND
+ 113359  113359 python
+ 113359  113362 python
+ 113359  113363 python
+ 113359  113364 python
+```
+
+`PID` 一列全是 113359（同一个进程），`TID` 各不相同，说明确实是多线程。
+
+**PPID 会变化**：程序刚启动时 PPID 是 `113351`（启动它的那个 shell）；
+程序运行一段时间后再采样，PPID 变成了 `3390`（`systemd`）：
+
+```bash
+ps -o pid,ppid,%cpu,%mem,etime,nlwp,cmd -p 113359
+```
+
+```text
+    PID    PPID %CPU %MEM     ELAPSED NLWP CMD
+ 113359    3390  200  0.4       01:26   48 python camera.py --camera 0 --output raw_capture.mp4 --width 640 --height 480 --fps 30
+```
+
+原因是**原来那个父进程（shell）已经退出了**，`camera.py` 成为孤儿进程后被 init/systemd 收养
+（reparent）。这是一个正常的内核行为，不是程序的问题。
+
+### 3.5 htop 截图
+
+![htop](assets/process/htop.png)
+
+`assets/process/htop.png`
+
+截图内容说明：
+
+```text
+顶部 24 条 CPU 占用条            当前电脑各核心使用情况
+Mem: 6.94G/31.1G                内存占用
+Tasks: 171; 1551 thr; 351 kthr  任务数 / 线程数
+Load average: 1.75 0.96 0.95    系统负载
+进程列表                          python camera.py 及其各线程
+```
+
+htop 中按 `H` 开启了线程视图，因此 `python camera.py` 的 48 个线程会各自作为一行列出，
+可以看到主线程与各子线程分别占用的 CPU。
+
+截图时把三个 OpenCV 窗口以及其它无关窗口最小化，避免遮挡 htop。
+
 ## 4. Python Project B
+
+Project B 读取 Project A 保存的原始视频，离线处理后再输出一个 MP4，
+输出画面为三个并排面板：
+
+```text
+原始视频 | Canny 边缘 | 帧间运动区域
+```
+
+### 4.1 创建第二个环境
+
+Project B 的 `pyproject.toml` 要求 `requires-python = ">=3.12,<3.14"`：
+
+```bash
+conda create -n robocon_b python=3.12 -y
+conda activate robocon_b
+python --version
+which python
+```
+
+```text
+Python 3.12.14
+/home/szc/miniconda3/envs/robocon_b/bin/python
+```
+
+### 4.2 安装依赖
+
+```bash
+cd python_B
+pip install -r requirements.txt
+```
+
+```text
+Successfully installed imageio-2.37.4 imageio-ffmpeg-0.6.0 lazy-loader-0.6
+networkx-3.7 numpy-2.5.3 pillow-12.3.0 scikit-image-0.26.0 scipy-1.18.1 tifffile-2026.9.20
+```
+
+版本核对：
+
+| 依赖 | 实装版本 | 要求 | |
+|---|---|---|---|
+| Python | 3.12.14 | `>=3.12,<3.14` | ✅ |
+| NumPy | 2.5.3 | `>=2.0,<3.0` | ✅ |
+| ImageIO | 2.37.4 | `>=2.36,<3.0` | ✅ |
+| imageio-ffmpeg | 0.6.0 | `>=0.5,<1.0` | ✅ |
+| scikit-image | 0.26.0 | `>=0.24,<0.27` | ✅ |
+
+本项目**不依赖 OpenCV**，写出 H.264 由 `imageio-ffmpeg` 自带的 ffmpeg 完成：
+
+```bash
+python -c "import imageio_ffmpeg; print(imageio_ffmpeg.get_ffmpeg_exe())"
+```
+
+```text
+/home/szc/miniconda3/envs/robocon_b/lib/python3.12/site-packages/imageio_ffmpeg/binaries/ffmpeg-linux-x86_64-v7.0.2
+ffmpeg version 7.0.2-static
+```
+
+### 4.3 运行
+
+```bash
+python analyze_video.py \
+  --input ../python_A/raw_capture.mp4 \
+  --output advanced_analysis.mp4
+```
+
+```text
+Processed 30 frames...
+Processed 60 frames...
+...
+Processed 2670 frames...
+Input:  /home/szc/code/assignment2/ROBOCON-Vision-Assignment-1/python_A/raw_capture.mp4
+Output: /home/szc/code/assignment2/ROBOCON-Vision-Assignment-1/python_B/advanced_analysis.mp4
+Frames: 2696
+Panels: original | Canny edges | motion mask
+```
+
+### 4.4 输出结果
+
+```text
+advanced_analysis.mp4: 2696 帧, 30 fps, 1920x480, 时长 89.87 s, H.264, 106 MB
+```
+
+1920 = 640 × 3，正好是三个面板并排的宽度。输出视频体积较大（106 MB），
+按 `.gitignore` 规则未提交到 Git，本地路径为 `python_B/advanced_analysis.mp4`。
+
+画面证据（第 50 秒的一帧）：
+
+![Project B 输出画面](assets/python_b/advanced_analysis_frame.png)
+
+`assets/python_b/advanced_analysis_frame.png`
+
+```text
+面板0  原始视频      平均色=121.0  标准差=50.9
+面板1  Canny 边缘    平均色= 25.4  标准差=75.4   非黑像素 93528
+面板2  帧间运动      平均色=  1.4  标准差=18.5   非黑像素  4917
+```
+
+**关于运动面板大面积是黑的**：这不是程序错误。本次拍摄时摄像头对着静止的场景，
+相邻帧差异低于 `analyze_frame()` 里 `np.abs(gray - previous_gray) > 0.08` 的阈值，
+所以大部分帧的运动掩膜为空。逐帧统计可验证：
+
+```text
+帧    0 ~ 1400    运动面板非黑像素 = 0
+帧 1500           运动面板非黑像素 = 4917     <- 上面截图用的就是这一帧
+帧 2300           运动面板非黑像素 = 249
+帧 2500           运动面板非黑像素 = 1074
+其余帧                                   = 0
+```
+
+只有画面中确实出现运动的那几帧检测到了变化，说明运动检测逻辑本身工作正常。
+
+### 4.5 为什么不能用同一个环境
+
+```text
+Project A 使用的 Conda 环境: robocon_a
+Python 版本:                 3.10.21
+Project B 使用的 Conda 环境: robocon_b
+Python 版本:                 3.12.14
+```
+
+原因是两个项目在元数据里声明了**互相排斥**的版本范围，无法同时满足：
+
+| | Project A | Project B | 是否相容 |
+|---|---|---|---|
+| Python | `>=3.9,<3.11` | `>=3.12,<3.14` | ❌ 区间不相交 |
+| NumPy | `>=1.26,<2.0` | `>=2.0,<3.0` | ❌ 区间不相交 |
+
+Python 的要求是 `[3.9, 3.11)` 与 `[3.12, 3.14)`，**没有任何一个版本能同时落进两个区间**；
+NumPy 的 `1.x` 与 `2.x` 同样没有交集。作业明确不允许修改 `pyproject.toml` 里的
+`requires-python` 来绕过，所以唯一的做法就是建两个独立环境。
+
+这也是为什么不能"先把 A 跑完再把环境升级成 B"——那样会破坏 A 的环境。
+两个环境各自独立，互不影响，作业结束时两个项目都能重新运行。
+
+做完 Project B 之后回查两个环境，确认互不干扰、都还能用：
+
+```bash
+~/miniconda3/envs/robocon_a/bin/python -c "import sys, numpy, cv2; print(sys.version.split()[0], numpy.__version__, cv2.__version__)"
+~/miniconda3/envs/robocon_b/bin/python -c "import sys, numpy, skimage, imageio; print(sys.version.split()[0], numpy.__version__, skimage.__version__)"
+```
+
+```text
+robocon_a:  3.10.21   numpy 1.26.4   cv2 4.11.0
+robocon_b:  3.12.14   numpy 2.5.3    skimage 0.26.0   imageio 2.37.4
+```
+
+两个环境的 NumPy 主版本不同（1.26.4 / 2.5.3）却互不影响；
+`robocon_a` 里没有 scikit-image、`robocon_b` 里没有 OpenCV，正是项目各自的依赖预期。
 
 ## 5. C++ Manual Build
 
+本章**不使用 CMake**，先用一条完整的 `g++` 命令完成构建。
+
+### 5.1 依赖准备
+
+```bash
+g++ --version
+```
+
+```text
+g++ (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0
+```
+
+OpenCV 与 Eigen 使用 Ubuntu 发行版的 development package，**不从源码编译**：
+
+```bash
+dpkg -l | grep -E "libopencv-dev|libeigen3-dev"
+```
+
+```text
+ii  libeigen3-dev   3.4.0-4build0.1
+ii  libopencv-dev   4.6.0+dfsg-13.1ubuntu1
+```
+
+```bash
+pkg-config --modversion opencv4
+```
+
+```text
+OpenCV C++: 4.6.0      (要求 >=4.5,<5.0  ✅)
+Eigen:      3.4.0      (要求 >=3.3,<4.0  ✅)
+```
+
+注意 Python 环境里的 `opencv-python`（`robocon_a` 中的 4.11.0）**不能**用于 C++ 编译 ——
+那只是给 Python 用的 wheel，不含 C++ 头文件和链接库。
+
+头文件和库的实际位置：
+
+```bash
+pkg-config --variable=includedir opencv4     # /usr/include/opencv4
+pkg-config --variable=libdir     opencv4     # /usr/lib/x86_64-linux-gnu
+ls /usr/include/eigen3/Eigen/Dense           # Eigen 是纯头文件库
+```
+
+### 5.2 手工 g++ 命令
+
+```bash
+g++ -std=c++17 -Iinclude -I/usr/include/eigen3 \
+    src/main.cpp src/transform.cpp \
+    $(pkg-config --cflags --libs opencv4) \
+    -o video_processor
+```
+
+`pkg-config` 提供的两组参数：
+
+```bash
+pkg-config --cflags opencv4
+# -I/usr/include/opencv4
+
+pkg-config --libs opencv4
+# -lopencv_stitching -lopencv_alphamat ... -lopencv_imgproc -lopencv_core
+```
+
+编译结果：
+
+```text
+real    0m1.786s
+```
+
+```text
+video_processor: ELF 64-bit LSB pie executable, x86-64, dynamically linked, not stripped
+-rwxrwxr-x  67K  video_processor
+```
+
+没有产生 `.o` 中间文件（一条命令直接完成编译和链接）。
+
+### 5.3 运行
+
+```bash
+./video_processor ../python_A/raw_capture.mp4
+```
+
+```text
+Input: ../python_A/raw_capture.mp4
+Output: cpp_processed.mp4
+Frames: 2696
+Mean scene luma: 121.097
+Panels: original | Otsu binary | Canny edges
+```
+
+输出（省略第二个参数时默认写 `cpp_processed.mp4`）：
+
+```text
+cpp_processed.mp4: 2696 帧, 30 fps, 1920x480, 时长 89.87 s, 编码 mp4v, 208 MB
+```
+
+`Mean scene luma: 121.097` 是 `transform.cpp` 里用 **Eigen** 算出来的
+（对画面平均 BGR 做点积），这个亮度值随后参与 Canny 的高低阈值计算：
+
+```cpp
+const Eigen::Vector3d bgr_to_luma(0.114, 0.587, 0.299);
+const double luma = bgr_to_luma.dot(mean_color);
+```
+
+画面证据（第 50 秒的一帧）：
+
+![C++ 输出画面](assets/cpp/cpp_processed_frame.png)
+
+`assets/cpp/cpp_processed_frame.png`
+
+```text
+面板0  原始视频       平均=120.0  标准差= 50.9  非黑像素 307200
+面板1  Otsu 二值化    平均=129.7  标准差=125.6
+面板2  Canny 边缘     平均=  9.3  标准差= 47.1  非黑像素  11085
+```
+
+二值化面板的灰度直方图是**完全双峰**的，验证 Otsu 确实输出了二值结果：
+
+```text
+    0- 31   148817  48.44%   ##############################################
+   32-223        0   0.00%
+  224-255   158383  51.56%   ##################################################
+```
+
+视频文件较大（208 MB），按 `.gitignore` 规则未提交到 Git，本地路径为 `cpp/cpp_processed.mp4`。
+
+### 5.4 作业要求回答的问题
+
+**1. `-I` 的作用是什么？**
+
+`-I` 告诉编译器**去哪里找 `#include` 的头文件**。默认只搜索系统目录和当前文件所在目录，
+不会搜索 `include/`。本项目里 `main.cpp` 写了 `#include "transform.hpp"`，而这个文件在
+`include/` 下，所以必须加 `-Iinclude`。同理 `transform.cpp` 写了 `#include <Eigen/Dense>`，
+Eigen 装在 `/usr/include/eigen3`，所以必须加 `-I/usr/include/eigen3`。
+
+实测不加的后果：
+
+```bash
+# 不加 -Iinclude
+$ g++ -std=c++17 src/main.cpp src/transform.cpp $(pkg-config --cflags --libs opencv4) -o /tmp/_x1
+src/main.cpp:7:10: fatal error: transform.hpp: 没有那个文件或目录
+```
+
+```bash
+# 不加 -I/usr/include/eigen3
+$ g++ -std=c++17 -Iinclude src/main.cpp src/transform.cpp $(pkg-config --cflags --libs opencv4) -o /tmp/_x2
+src/transform.cpp:6:10: fatal error: Eigen/Dense: 没有那个文件或目录
+```
+
+**2. 为什么 `transform.hpp` 不单独作为一个 cpp 文件编译？**
+
+因为它**不是编译单元**。`transform.hpp` 里只有**声明**：
+
+```cpp
+TransformResult transformFrame(const cv::Mat& bgr_frame);
+cv::Mat composePreview(const cv::Mat& original, const TransformResult& result);
+```
+
+没有函数体，编译它产生不出任何机器码。它的作用是让 `main.cpp` 和 `transform.cpp`
+都认识这两个函数的签名 —— `main.cpp` 据此知道自己可以调用它们，`transform.cpp` 据此
+确认自己的实现和声明一致。`#pragma once` 保证同一个编译单元里重复包含时只展开一次。
+
+真正需要参与编译的是两个 `.cpp`：`main.cpp`（含 `main`）和 `transform.cpp`（含函数实现）。
+
+**3. 为什么只写 `main.cpp` 往往无法得到完整程序？**
+
+因为 `main.cpp` 只**调用**了那两个函数，函数体在 `transform.cpp` 里。
+只编译 `main.cpp` 能通过编译阶段（头文件提供了声明），但**链接阶段会失败**：
+
+```bash
+$ g++ -std=c++17 -Iinclude -I/usr/include/eigen3 src/main.cpp $(pkg-config --cflags --libs opencv4) -o /tmp/_x3
+main.cpp:(.text+0x3a0): undefined reference to `transformFrame(cv::Mat const&)'
+/usr/bin/ld: main.cpp:(.text+0x3c0): undefined reference to `composePreview(cv::Mat const&, TransformResult const&)'
+collect2: error: ld returned 1 exit status
+```
+
+`undefined reference` 是链接器报的错，意思正是"有声明、没找到实现"。
+
+顺带验证：不给 OpenCV 参数时，连编译阶段都过不去：
+
+```bash
+$ g++ -std=c++17 -Iinclude -I/usr/include/eigen3 src/main.cpp src/transform.cpp -o /tmp/_x4
+src/main.cpp:5:10: fatal error: opencv2/opencv.hpp: 没有那个文件或目录
+```
+
+**4. 编译成功后产生的文件是什么？**
+
+是一个**可执行文件**，本例中命名为 `video_processor`（由 `-o` 指定）。
+`file` 的输出：
+
+```text
+video_processor: ELF 64-bit LSB pie executable, x86-64, version 1 (SYSV),
+dynamically linked, interpreter /lib64/ld-linux-x86-64.so.2, for GNU/Linux 3.2.0, not stripped
+```
+
+它是动态链接的可执行文件，"dynamically linked" 说明 OpenCV 的库**没有**被复制进这个文件，
+运行时才由动态链接器从 `/usr/lib/x86_64-linux-gnu` 加载。
+
+如果**省略 `-o`**，g++ 会默认产出名为 `a.out` 的文件：
+
+```bash
+$ g++ -std=c++17 -Iinclude -I/usr/include/eigen3 src/main.cpp src/transform.cpp \
+      $(pkg-config --cflags --libs opencv4)
+$ ls -l a.out
+-rwxrwxr-x 1 szc szc 67744  a.out
+```
+
 ## 6. CMake Build
+
+手工 `g++` 构建成功之后，才进入 CMake 阶段。仓库原本**没有** `CMakeLists.txt`，
+这是作业设定的一部分，由学生自己编写。
+
+### 6.1 CMakeLists.txt 的完整内容
+
+文件位于 `cpp/CMakeLists.txt`：
+
+```cmake
+cmake_minimum_required(VERSION 3.16)
+
+project(robocon_vision_cpp
+    VERSION 1.0.0
+    DESCRIPTION "ROBOCON Vision Assignment 1 - C++ video transform"
+    LANGUAGES CXX
+)
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
+# 手工编译时 -Iinclude 和 -I/usr/include/eigen3 由命令行给出,
+# CMake 中分别由 target_include_directories 和 Eigen3::Eigen 的
+# INTERFACE_INCLUDE_DIRECTORIES 提供。
+find_package(OpenCV REQUIRED)
+find_package(Eigen3 REQUIRED)
+
+add_executable(video_processor
+    src/main.cpp
+    src/transform.cpp
+)
+
+target_include_directories(video_processor
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
+target_link_libraries(video_processor
+    PRIVATE
+        ${OpenCV_LIBS}
+        Eigen3::Eigen
+)
+```
+
+几个选择的原因：
+
+- `add_executable` 里写**两个 `.cpp`** —— 对应手工命令里 `src/main.cpp src/transform.cpp`。
+  仍然不包含 `transform.hpp`，因为头文件不是编译单元（见第 5.4 节第 2 问）。
+- `target_include_directories(... include)` —— 对应手工的 `-Iinclude`。
+- `Eigen3::Eigen` 是一个 imported target，它自带 `INTERFACE_INCLUDE_DIRECTORIES`，
+  所以**不需要**手写 `-I/usr/include/eigen3`。
+- `find_package(OpenCV REQUIRED)` 提供的 `${OpenCV_LIBS}` —— 对应手工的
+  `pkg-config --libs opencv4`。
+- `CMAKE_CXX_STANDARD 17` —— 对应手工的 `-std=c++17`。
+
+### 6.2 configure 与 build
+
+```bash
+cmake -S . -B build
+```
+
+```text
+-- The CXX compiler identification is GNU 13.3.0
+-- Detecting CXX compiler ABI info - done
+-- Check for working CXX compiler: /usr/bin/c++ - skipped
+-- Detecting CXX compile features - done
+-- Found OpenCV: /usr (found version "4.6.0")
+-- Configuring done (0.3s)
+-- Generating done (0.0s)
+-- Build files have been written to: .../cpp/build
+```
+
+```bash
+cmake --build build
+```
+
+```text
+[ 33%] Building CXX object CMakeFiles/video_processor.dir/src/main.cpp.o
+[ 66%] Building CXX object CMakeFiles/video_processor.dir/src/transform.cpp.o
+[100%] Linking CXX executable video_processor
+[100%] Built target video_processor
+```
+
+产物：
+
+```text
+-rwxrwxr-x  67K  build/video_processor
+build/video_processor: ELF 64-bit LSB pie executable, x86-64, dynamically linked, not stripped
+```
+
+注意这里**产生了 `.o` 文件**（在 `build/CMakeFiles/` 下），而手工那条命令是一步到底、
+不落 `.o`。CMake 默认走的是"编译成目标文件，再统一链接"的两步流程。
+
+### 6.3 从 build/ 运行
+
+```bash
+cd build
+./video_processor ../../python_A/raw_capture.mp4 cpp_from_cmake.mp4
+```
+
+```text
+Input: ../../python_A/raw_capture.mp4
+Output: cpp_from_cmake.mp4
+Frames: 2696
+Mean scene luma: 121.097
+Panels: original | Otsu binary | Canny edges
+
+real    0m10.388s
+```
+
+输出 `build/cpp_from_cmake.mp4`：2696 帧，30 fps，1920x480，mp4v，208 MB，
+`Mean scene luma` 与手工编译的版本完全一致（121.097）。
+
+### 6.4 手工 g++ 命令和 CMake 的关系是什么？
+
+**CMake 不自己编译代码，它是"生成构建脚本的工具"。**
+`cmake -S . -B build` 读 `CMakeLists.txt`，生成一组 Makefile；
+`cmake --build build` 再去执行这些 Makefile —— 而 Makefile 里跑的还是**同一条 `g++` 命令**。
+所以 CMake 做的是"把手写的编译命令自动化地拼出来"，不是另一套编译机制。
+
+这一点可以直接验证。CMake 生成的编译命令：
+
+```bash
+cat build/CMakeFiles/video_processor.dir/flags.make
+```
+
+```text
+CXX_INCLUDES = -I<项目>/cpp/include -isystem /usr/include/opencv4 -isystem /usr/include/eigen3
+CXX_FLAGS    = -std=c++17
+```
+
+与手工命令逐段对应：
+
+| 手工 g++ 命令里的部分 | CMake 里由谁提供 |
+|---|---|
+| `-std=c++17` | `set(CMAKE_CXX_STANDARD 17)` |
+| `-Iinclude` | `target_include_directories(...)` |
+| `-I/usr/include/eigen3` | `Eigen3::Eigen` 这个 imported target |
+| `$(pkg-config --cflags opencv4)` 即 `-I/usr/include/opencv4` | `find_package(OpenCV)` 的 imported target |
+| `$(pkg-config --libs opencv4)` 即一堆 `-lopencv_*` | `${OpenCV_LIBS}` |
+| `src/main.cpp src/transform.cpp` | `add_executable(...)` 的源文件列表 |
+| `-o video_processor` | `add_executable(video_processor ...)` 的名字 |
+
+链接阶段的差异只有形式：CMake 写的是库的**绝对路径**，手工写的是 `-l` 短选项。
+
+```bash
+cat build/CMakeFiles/video_processor.dir/link.txt
+```
+
+```text
+/usr/bin/c++ .../main.cpp.o .../transform.cpp.o -o video_processor \
+  /usr/lib/x86_64-linux-gnu/libopencv_stitching.so.4.6.0 \
+  ... \
+  /usr/lib/x86_64-linux-gnu/libopencv_core.so.4.6.0
+```
+
+`pkg-config --libs` 给的是 `-lopencv_core`，两者指向同一个文件。
+
+**最终证据**：两条路径产出的可执行文件**字节级完全相同**：
+
+```bash
+md5sum video_processor build/video_processor
+```
+
+```text
+08cae74234c3d8e20527f93815c80d1b  video_processor
+08cae74234c3d8e20527f93815c80d1b  build/video_processor
+```
+
+`file` 命令给出的 `BuildID[sha1]=7af3aff0ff927c78ed8e45de8f7fcdb6f52b1197` 也一致。
+说明 CMake 只是把手工那条命令重写了一遍，编译器做的事没有任何区别。
 
 ## 7. Git / GitHub
 
