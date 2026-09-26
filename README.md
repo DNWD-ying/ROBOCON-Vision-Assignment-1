@@ -838,6 +838,177 @@ $ ls -l a.out
 
 ## 6. CMake Build
 
+手工 `g++` 构建成功之后，才进入 CMake 阶段。仓库原本**没有** `CMakeLists.txt`，
+这是作业设定的一部分，由学生自己编写。
+
+### 6.1 CMakeLists.txt 的完整内容
+
+文件位于 `cpp/CMakeLists.txt`：
+
+```cmake
+cmake_minimum_required(VERSION 3.16)
+
+project(robocon_vision_cpp
+    VERSION 1.0.0
+    DESCRIPTION "ROBOCON Vision Assignment 1 - C++ video transform"
+    LANGUAGES CXX
+)
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
+# 手工编译时 -Iinclude 和 -I/usr/include/eigen3 由命令行给出,
+# CMake 中分别由 target_include_directories 和 Eigen3::Eigen 的
+# INTERFACE_INCLUDE_DIRECTORIES 提供。
+find_package(OpenCV REQUIRED)
+find_package(Eigen3 REQUIRED)
+
+add_executable(video_processor
+    src/main.cpp
+    src/transform.cpp
+)
+
+target_include_directories(video_processor
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
+target_link_libraries(video_processor
+    PRIVATE
+        ${OpenCV_LIBS}
+        Eigen3::Eigen
+)
+```
+
+几个选择的原因：
+
+- `add_executable` 里写**两个 `.cpp`** —— 对应手工命令里 `src/main.cpp src/transform.cpp`。
+  仍然不包含 `transform.hpp`，因为头文件不是编译单元（见第 5.4 节第 2 问）。
+- `target_include_directories(... include)` —— 对应手工的 `-Iinclude`。
+- `Eigen3::Eigen` 是一个 imported target，它自带 `INTERFACE_INCLUDE_DIRECTORIES`，
+  所以**不需要**手写 `-I/usr/include/eigen3`。
+- `find_package(OpenCV REQUIRED)` 提供的 `${OpenCV_LIBS}` —— 对应手工的
+  `pkg-config --libs opencv4`。
+- `CMAKE_CXX_STANDARD 17` —— 对应手工的 `-std=c++17`。
+
+### 6.2 configure 与 build
+
+```bash
+cmake -S . -B build
+```
+
+```text
+-- The CXX compiler identification is GNU 13.3.0
+-- Detecting CXX compiler ABI info - done
+-- Check for working CXX compiler: /usr/bin/c++ - skipped
+-- Detecting CXX compile features - done
+-- Found OpenCV: /usr (found version "4.6.0")
+-- Configuring done (0.3s)
+-- Generating done (0.0s)
+-- Build files have been written to: .../cpp/build
+```
+
+```bash
+cmake --build build
+```
+
+```text
+[ 33%] Building CXX object CMakeFiles/video_processor.dir/src/main.cpp.o
+[ 66%] Building CXX object CMakeFiles/video_processor.dir/src/transform.cpp.o
+[100%] Linking CXX executable video_processor
+[100%] Built target video_processor
+```
+
+产物：
+
+```text
+-rwxrwxr-x  67K  build/video_processor
+build/video_processor: ELF 64-bit LSB pie executable, x86-64, dynamically linked, not stripped
+```
+
+注意这里**产生了 `.o` 文件**（在 `build/CMakeFiles/` 下），而手工那条命令是一步到底、
+不落 `.o`。CMake 默认走的是"编译成目标文件，再统一链接"的两步流程。
+
+### 6.3 从 build/ 运行
+
+```bash
+cd build
+./video_processor ../../python_A/raw_capture.mp4 cpp_from_cmake.mp4
+```
+
+```text
+Input: ../../python_A/raw_capture.mp4
+Output: cpp_from_cmake.mp4
+Frames: 2696
+Mean scene luma: 121.097
+Panels: original | Otsu binary | Canny edges
+
+real    0m10.388s
+```
+
+输出 `build/cpp_from_cmake.mp4`：2696 帧，30 fps，1920x480，mp4v，208 MB，
+`Mean scene luma` 与手工编译的版本完全一致（121.097）。
+
+### 6.4 手工 g++ 命令和 CMake 的关系是什么？
+
+**CMake 不自己编译代码，它是"生成构建脚本的工具"。**
+`cmake -S . -B build` 读 `CMakeLists.txt`，生成一组 Makefile；
+`cmake --build build` 再去执行这些 Makefile —— 而 Makefile 里跑的还是**同一条 `g++` 命令**。
+所以 CMake 做的是"把手写的编译命令自动化地拼出来"，不是另一套编译机制。
+
+这一点可以直接验证。CMake 生成的编译命令：
+
+```bash
+cat build/CMakeFiles/video_processor.dir/flags.make
+```
+
+```text
+CXX_INCLUDES = -I<项目>/cpp/include -isystem /usr/include/opencv4 -isystem /usr/include/eigen3
+CXX_FLAGS    = -std=c++17
+```
+
+与手工命令逐段对应：
+
+| 手工 g++ 命令里的部分 | CMake 里由谁提供 |
+|---|---|
+| `-std=c++17` | `set(CMAKE_CXX_STANDARD 17)` |
+| `-Iinclude` | `target_include_directories(...)` |
+| `-I/usr/include/eigen3` | `Eigen3::Eigen` 这个 imported target |
+| `$(pkg-config --cflags opencv4)` 即 `-I/usr/include/opencv4` | `find_package(OpenCV)` 的 imported target |
+| `$(pkg-config --libs opencv4)` 即一堆 `-lopencv_*` | `${OpenCV_LIBS}` |
+| `src/main.cpp src/transform.cpp` | `add_executable(...)` 的源文件列表 |
+| `-o video_processor` | `add_executable(video_processor ...)` 的名字 |
+
+链接阶段的差异只有形式：CMake 写的是库的**绝对路径**，手工写的是 `-l` 短选项。
+
+```bash
+cat build/CMakeFiles/video_processor.dir/link.txt
+```
+
+```text
+/usr/bin/c++ .../main.cpp.o .../transform.cpp.o -o video_processor \
+  /usr/lib/x86_64-linux-gnu/libopencv_stitching.so.4.6.0 \
+  ... \
+  /usr/lib/x86_64-linux-gnu/libopencv_core.so.4.6.0
+```
+
+`pkg-config --libs` 给的是 `-lopencv_core`，两者指向同一个文件。
+
+**最终证据**：两条路径产出的可执行文件**字节级完全相同**：
+
+```bash
+md5sum video_processor build/video_processor
+```
+
+```text
+08cae74234c3d8e20527f93815c80d1b  video_processor
+08cae74234c3d8e20527f93815c80d1b  build/video_processor
+```
+
+`file` 命令给出的 `BuildID[sha1]=7af3aff0ff927c78ed8e45de8f7fcdb6f52b1197` 也一致。
+说明 CMake 只是把手工那条命令重写了一遍，编译器做的事没有任何区别。
+
 ## 7. Git / GitHub
 
 ## 8. Problems and Notes
