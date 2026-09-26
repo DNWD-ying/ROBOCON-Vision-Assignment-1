@@ -2,8 +2,7 @@
 
 ## 1. System Information
 
-本部分全部通过命令行采集，未使用图形界面。完整原始输出留档于
-[`assets/system/system_info.txt`](assets/system/system_info.txt)。
+本部分全部通过命令行采集，未使用图形界面。以下命令与输出均为原样复制。
 
 ### 1.1 操作系统与内核
 
