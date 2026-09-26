@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "robocon-vision-assignment1-project-a"
+version = "1.0.0"
+description = "ROBOCON Vision Assignment 1 - live camera and process observation"
+requires-python = ">=3.9,<3.11"
+dependencies = [
+  "numpy>=1.26,<2.0",
+  "opencv-python>=4.9,<5.0",
+]
+
+[project.scripts]
+robocon-camera-a = "camera:main"
+
+[tool.setuptools]
+py-modules = ["camera"]

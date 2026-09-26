@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "robocon-vision-assignment1-project-b"
+version = "1.0.0"
+description = "ROBOCON Vision Assignment 1 - offline video analysis"
+requires-python = ">=3.12,<3.14"
+dependencies = [
+  "numpy>=2.0,<3.0",
+  "imageio>=2.36,<3.0",
+  "imageio-ffmpeg>=0.5,<1.0",
+  "scikit-image>=0.24,<0.27",
+]
+
+[project.scripts]
+robocon-video-b = "analyze_video:main"
+
+[tool.setuptools]
+py-modules = ["analyze_video"]
