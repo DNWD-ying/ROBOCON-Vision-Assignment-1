@@ -630,6 +630,212 @@ robocon_b:  3.12.14   numpy 2.5.3    skimage 0.26.0   imageio 2.37.4
 
 ## 5. C++ Manual Build
 
+本章**不使用 CMake**，先用一条完整的 `g++` 命令完成构建。
+
+### 5.1 依赖准备
+
+```bash
+g++ --version
+```
+
+```text
+g++ (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0
+```
+
+OpenCV 与 Eigen 使用 Ubuntu 发行版的 development package，**不从源码编译**：
+
+```bash
+dpkg -l | grep -E "libopencv-dev|libeigen3-dev"
+```
+
+```text
+ii  libeigen3-dev   3.4.0-4build0.1
+ii  libopencv-dev   4.6.0+dfsg-13.1ubuntu1
+```
+
+```bash
+pkg-config --modversion opencv4
+```
+
+```text
+OpenCV C++: 4.6.0      (要求 >=4.5,<5.0  ✅)
+Eigen:      3.4.0      (要求 >=3.3,<4.0  ✅)
+```
+
+注意 Python 环境里的 `opencv-python`（`robocon_a` 中的 4.11.0）**不能**用于 C++ 编译 ——
+那只是给 Python 用的 wheel，不含 C++ 头文件和链接库。
+
+头文件和库的实际位置：
+
+```bash
+pkg-config --variable=includedir opencv4     # /usr/include/opencv4
+pkg-config --variable=libdir     opencv4     # /usr/lib/x86_64-linux-gnu
+ls /usr/include/eigen3/Eigen/Dense           # Eigen 是纯头文件库
+```
+
+### 5.2 手工 g++ 命令
+
+```bash
+g++ -std=c++17 -Iinclude -I/usr/include/eigen3 \
+    src/main.cpp src/transform.cpp \
+    $(pkg-config --cflags --libs opencv4) \
+    -o video_processor
+```
+
+`pkg-config` 提供的两组参数：
+
+```bash
+pkg-config --cflags opencv4
+# -I/usr/include/opencv4
+
+pkg-config --libs opencv4
+# -lopencv_stitching -lopencv_alphamat ... -lopencv_imgproc -lopencv_core
+```
+
+编译结果：
+
+```text
+real    0m1.786s
+```
+
+```text
+video_processor: ELF 64-bit LSB pie executable, x86-64, dynamically linked, not stripped
+-rwxrwxr-x  67K  video_processor
+```
+
+没有产生 `.o` 中间文件（一条命令直接完成编译和链接）。
+
+### 5.3 运行
+
+```bash
+./video_processor ../python_A/raw_capture.mp4
+```
+
+```text
+Input: ../python_A/raw_capture.mp4
+Output: cpp_processed.mp4
+Frames: 2696
+Mean scene luma: 121.097
+Panels: original | Otsu binary | Canny edges
+```
+
+输出（省略第二个参数时默认写 `cpp_processed.mp4`）：
+
+```text
+cpp_processed.mp4: 2696 帧, 30 fps, 1920x480, 时长 89.87 s, 编码 mp4v, 208 MB
+```
+
+`Mean scene luma: 121.097` 是 `transform.cpp` 里用 **Eigen** 算出来的
+（对画面平均 BGR 做点积），这个亮度值随后参与 Canny 的高低阈值计算：
+
+```cpp
+const Eigen::Vector3d bgr_to_luma(0.114, 0.587, 0.299);
+const double luma = bgr_to_luma.dot(mean_color);
+```
+
+画面证据（第 50 秒的一帧）：
+
+![C++ 输出画面](assets/cpp/cpp_processed_frame.png)
+
+`assets/cpp/cpp_processed_frame.png`
+
+```text
+面板0  原始视频       平均=120.0  标准差= 50.9  非黑像素 307200
+面板1  Otsu 二值化    平均=129.7  标准差=125.6
+面板2  Canny 边缘     平均=  9.3  标准差= 47.1  非黑像素  11085
+```
+
+二值化面板的灰度直方图是**完全双峰**的，验证 Otsu 确实输出了二值结果：
+
+```text
+    0- 31   148817  48.44%   ##############################################
+   32-223        0   0.00%
+  224-255   158383  51.56%   ##################################################
+```
+
+视频文件较大（208 MB），按 `.gitignore` 规则未提交到 Git，本地路径为 `cpp/cpp_processed.mp4`。
+
+### 5.4 作业要求回答的问题
+
+**1. `-I` 的作用是什么？**
+
+`-I` 告诉编译器**去哪里找 `#include` 的头文件**。默认只搜索系统目录和当前文件所在目录，
+不会搜索 `include/`。本项目里 `main.cpp` 写了 `#include "transform.hpp"`，而这个文件在
+`include/` 下，所以必须加 `-Iinclude`。同理 `transform.cpp` 写了 `#include <Eigen/Dense>`，
+Eigen 装在 `/usr/include/eigen3`，所以必须加 `-I/usr/include/eigen3`。
+
+实测不加的后果：
+
+```bash
+# 不加 -Iinclude
+$ g++ -std=c++17 src/main.cpp src/transform.cpp $(pkg-config --cflags --libs opencv4) -o /tmp/_x1
+src/main.cpp:7:10: fatal error: transform.hpp: 没有那个文件或目录
+```
+
+```bash
+# 不加 -I/usr/include/eigen3
+$ g++ -std=c++17 -Iinclude src/main.cpp src/transform.cpp $(pkg-config --cflags --libs opencv4) -o /tmp/_x2
+src/transform.cpp:6:10: fatal error: Eigen/Dense: 没有那个文件或目录
+```
+
+**2. 为什么 `transform.hpp` 不单独作为一个 cpp 文件编译？**
+
+因为它**不是编译单元**。`transform.hpp` 里只有**声明**：
+
+```cpp
+TransformResult transformFrame(const cv::Mat& bgr_frame);
+cv::Mat composePreview(const cv::Mat& original, const TransformResult& result);
+```
+
+没有函数体，编译它产生不出任何机器码。它的作用是让 `main.cpp` 和 `transform.cpp`
+都认识这两个函数的签名 —— `main.cpp` 据此知道自己可以调用它们，`transform.cpp` 据此
+确认自己的实现和声明一致。`#pragma once` 保证同一个编译单元里重复包含时只展开一次。
+
+真正需要参与编译的是两个 `.cpp`：`main.cpp`（含 `main`）和 `transform.cpp`（含函数实现）。
+
+**3. 为什么只写 `main.cpp` 往往无法得到完整程序？**
+
+因为 `main.cpp` 只**调用**了那两个函数，函数体在 `transform.cpp` 里。
+只编译 `main.cpp` 能通过编译阶段（头文件提供了声明），但**链接阶段会失败**：
+
+```bash
+$ g++ -std=c++17 -Iinclude -I/usr/include/eigen3 src/main.cpp $(pkg-config --cflags --libs opencv4) -o /tmp/_x3
+main.cpp:(.text+0x3a0): undefined reference to `transformFrame(cv::Mat const&)'
+/usr/bin/ld: main.cpp:(.text+0x3c0): undefined reference to `composePreview(cv::Mat const&, TransformResult const&)'
+collect2: error: ld returned 1 exit status
+```
+
+`undefined reference` 是链接器报的错，意思正是"有声明、没找到实现"。
+
+顺带验证：不给 OpenCV 参数时，连编译阶段都过不去：
+
+```bash
+$ g++ -std=c++17 -Iinclude -I/usr/include/eigen3 src/main.cpp src/transform.cpp -o /tmp/_x4
+src/main.cpp:5:10: fatal error: opencv2/opencv.hpp: 没有那个文件或目录
+```
+
+**4. 编译成功后产生的文件是什么？**
+
+是一个**可执行文件**，本例中命名为 `video_processor`（由 `-o` 指定）。
+`file` 的输出：
+
+```text
+video_processor: ELF 64-bit LSB pie executable, x86-64, version 1 (SYSV),
+dynamically linked, interpreter /lib64/ld-linux-x86-64.so.2, for GNU/Linux 3.2.0, not stripped
+```
+
+它是动态链接的可执行文件，"dynamically linked" 说明 OpenCV 的库**没有**被复制进这个文件，
+运行时才由动态链接器从 `/usr/lib/x86_64-linux-gnu` 加载。
+
+如果**省略 `-o`**，g++ 会默认产出名为 `a.out` 的文件：
+
+```bash
+$ g++ -std=c++17 -Iinclude -I/usr/include/eigen3 src/main.cpp src/transform.cpp \
+      $(pkg-config --cflags --libs opencv4)
+$ ls -l a.out
+-rwxrwxr-x 1 szc szc 67744  a.out
+```
+
 ## 6. CMake Build
 
 ## 7. Git / GitHub
