@@ -185,7 +185,7 @@ bash /tmp/miniconda.sh -b -p "$HOME/miniconda3"
 conda 26.7.1
 ```
 
-镜像配置（加速下载，非作业要求）：
+镜像配置：
 
 ```yaml
 # ~/.condarc
@@ -455,7 +455,7 @@ ps -o pid,ppid,%cpu,%mem,etime,nlwp,cmd -p 113359
 ```
 
 原因是**原来那个父进程（shell）已经退出了**，`camera.py` 成为孤儿进程后被 init/systemd 收养
-（reparent）。这是一个正常的内核行为，不是程序的问题。
+（reparent）。这是一个正常的内核行为，不是程序的问题。这一段问了AI,自己确实不知道（
 
 ### 3.5 htop 截图
 
@@ -759,12 +759,12 @@ const double luma = bgr_to_luma.dot(mean_color);
 
 **1. `-I` 的作用是什么？**
 
-`-I` 告诉编译器**去哪里找 `#include` 的头文件**。默认只搜索系统目录和当前文件所在目录，
+主要就是起一个定位作用。`-I` 告诉编译器**去哪里找 `#include` 的头文件**。默认只搜索系统目录和当前文件所在目录，
 不会搜索 `include/`。本项目里 `main.cpp` 写了 `#include "transform.hpp"`，而这个文件在
 `include/` 下，所以必须加 `-Iinclude`。同理 `transform.cpp` 写了 `#include <Eigen/Dense>`，
 Eigen 装在 `/usr/include/eigen3`，所以必须加 `-I/usr/include/eigen3`。
 
-实测不加的后果：
+实测不加的后果：（AI跑的）
 
 ```bash
 # 不加 -Iinclude
@@ -839,7 +839,7 @@ $ ls -l a.out
 ## 6. CMake Build
 
 手工 `g++` 构建成功之后，才进入 CMake 阶段。仓库原本**没有** `CMakeLists.txt`，
-这是作业设定的一部分，由学生自己编写。
+即下面部分由我亲自书写。
 
 ### 6.1 CMakeLists.txt 的完整内容
 
@@ -1117,9 +1117,7 @@ git branch -vv
 
 ### 7.4 一次实际的冲突处理
 
-创建 GitHub 仓库时勾选了 "Add a README file"，远端 `main` 上已有一个自动生成的
-`Initial commit`，与本地骨架提交**没有共同祖先**，直接推送会被拒。处理方式是把本地提交
-rebase 到远端那个提交之上：
+创建 GitHub 仓库时勾远端 `main` 上已有一个自动生成的`Initial commit`，与本地骨架提交**没有共同祖先**，直接推送会被拒。这其实是因为我创建这个仓库的时候任务还没有发布，所以里面有点别的东西，后面改名再同步就出了一点问题，不过无伤大雅。处理方式是把本地提交rebase 到远端那个提交之上：
 
 ```bash
 git fetch origin main
@@ -1174,14 +1172,9 @@ git check-ignore -v build/video_processor cpp/video_processor
 
 ### 8.1 环境与网络
 
-**Conda 官方源慢到不可用。** 从 `repo.anaconda.com` 下载 Miniconda 安装包速度只有约
-17 KB/s，按这个速度 150 MB 要半小时以上。改用清华镜像后达到 4.6 MB/s，41 秒完成。
-conda 频道和 pip 索引也一并指向镜像（见 2.1 节）。
+**Conda 官方源确实很慢。** 从conda官网下载 Miniconda 安装包速度只有大概17 KB/s，改用清华镜像后达到 4.6 MB/s，41 秒完成。conda 频道和 pip 索引也一并指向镜像（见 2.1 节）。
 
-**镜像站不一定有你想要的东西。** 试过西安交大镜像，它的 `/anaconda/miniconda/` 和
-`/anaconda/archive/` 都是**空目录**，`/anaconda/cloud/conda-forge/linux-64/` 也是空壳，
-只有目录结构没有内容；`pkgs/` 里的包时间戳停留在 2021 年。也就是说它只镜像了 conda
-的包仓库，没有安装程序，而且内容早已停更。换镜像前最好先确认目标文件确实存在。
+**镜像站不一定什么都有。** 因为最开始Ubuntu推荐的是西交的镜像网站，它的 `/anaconda/miniconda/` 和`/anaconda/archive/` 都是**空目录**，`/anaconda/cloud/conda-forge/linux-64/` 也是空壳，只有目录结构没有内容；`pkgs/` 里的包时间戳停留在 2021 年。也就是说它只镜像了 conda 的包仓库，没有安装程序，而且内容早已停更。换镜像前最好先确认网站里是不是有东西。（其实北外也比较好用，“bfsu“）
 
 **本机原本没有 Conda。** `conda: command not found`，且系统 Python 是 3.12.3，
 不满足 Project A 的 `>=3.9,<3.11`，所以安装 Conda 是完成 Project A 的前置条件。
@@ -1193,7 +1186,7 @@ conda 频道和 pip 索引也一并指向镜像（见 2.1 节）。
 直接合成壁纸层，不经过 X 的 root window；而窗口是真正的 X window，所以**窗口抓得到、
 背景抓不到**。任何基于 `XGetImage` 的方案（包括 ffmpeg 的 x11grab）都有同样的问题。
 
-最终改用 XDG desktop portal 的 `org.freedesktop.portal.Screenshot`，由合成器内部出图：
+后来就问AI大人，最终改用 XDG desktop portal 的 `org.freedesktop.portal.Screenshot`，由合成器内部出图：
 
 ```bash
 /usr/bin/python3 -c "..."   # 通过 PyGObject 调用 portal
@@ -1208,9 +1201,8 @@ conda 频道和 pip 索引也一并指向镜像（见 2.1 节）。
 
 **OpenCV 窗口不能缩放。** `cv2.imshow` 默认带 `WINDOW_AUTOSIZE`，窗口有固定尺寸提示，
 `wmctrl -e 0,x,y,w,h` 里的 `w,h` 会被忽略。用 1280x720 时窗口实际是 1280x779，
-三个横排要 3840 px 超出 2560 的屏宽，竖排又要 2337 px 超出 1600 的屏高，怎么摆都会重叠。
-最后用脚本自带的 `--width 640 --height 480` 让窗口变成 640x539，三个横排只占 1920 px，
-既有余量也不受窗口管理器偏移影响。
+三个横排要 3840 px 超出 2560 的屏宽，竖排又要 2337 px 超出 1600 的屏高，怎么摆都会重叠。其实手动很容易把三个窗口分开，不过AI写了一个脚本可以自动展开，我觉得还挺厉害的。
+最后弄出来，脚本自带的 `--width 640 --height 480` 让窗口变成 640x539，三个横排只占 1920 px，既有余量也不受窗口管理器偏移影响。
 
 **窗口管理器会覆盖手动摆位。** `xdotool windowmove` 移动的是 client 窗口，而带装饰的
 位置由 WM 控制，实测没生效（请求 (0,35) 实际落到 (36,68)）。换成走 EWMH 协议的
