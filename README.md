@@ -480,6 +480,154 @@ htop 中按 `H` 开启了线程视图，因此 `python camera.py` 的 48 个线�
 
 ## 4. Python Project B
 
+Project B 读取 Project A 保存的原始视频，离线处理后再输出一个 MP4，
+输出画面为三个并排面板：
+
+```text
+原始视频 | Canny 边缘 | 帧间运动区域
+```
+
+### 4.1 创建第二个环境
+
+Project B 的 `pyproject.toml` 要求 `requires-python = ">=3.12,<3.14"`：
+
+```bash
+conda create -n robocon_b python=3.12 -y
+conda activate robocon_b
+python --version
+which python
+```
+
+```text
+Python 3.12.14
+/home/szc/miniconda3/envs/robocon_b/bin/python
+```
+
+### 4.2 安装依赖
+
+```bash
+cd python_B
+pip install -r requirements.txt
+```
+
+```text
+Successfully installed imageio-2.37.4 imageio-ffmpeg-0.6.0 lazy-loader-0.6
+networkx-3.7 numpy-2.5.3 pillow-12.3.0 scikit-image-0.26.0 scipy-1.18.1 tifffile-2026.9.20
+```
+
+版本核对：
+
+| 依赖 | 实装版本 | 要求 | |
+|---|---|---|---|
+| Python | 3.12.14 | `>=3.12,<3.14` | ✅ |
+| NumPy | 2.5.3 | `>=2.0,<3.0` | ✅ |
+| ImageIO | 2.37.4 | `>=2.36,<3.0` | ✅ |
+| imageio-ffmpeg | 0.6.0 | `>=0.5,<1.0` | ✅ |
+| scikit-image | 0.26.0 | `>=0.24,<0.27` | ✅ |
+
+本项目**不依赖 OpenCV**，写出 H.264 由 `imageio-ffmpeg` 自带的 ffmpeg 完成：
+
+```bash
+python -c "import imageio_ffmpeg; print(imageio_ffmpeg.get_ffmpeg_exe())"
+```
+
+```text
+/home/szc/miniconda3/envs/robocon_b/lib/python3.12/site-packages/imageio_ffmpeg/binaries/ffmpeg-linux-x86_64-v7.0.2
+ffmpeg version 7.0.2-static
+```
+
+### 4.3 运行
+
+```bash
+python analyze_video.py \
+  --input ../python_A/raw_capture.mp4 \
+  --output advanced_analysis.mp4
+```
+
+```text
+Processed 30 frames...
+Processed 60 frames...
+...
+Processed 2670 frames...
+Input:  /home/szc/code/assignment2/ROBOCON-Vision-Assignment-1/python_A/raw_capture.mp4
+Output: /home/szc/code/assignment2/ROBOCON-Vision-Assignment-1/python_B/advanced_analysis.mp4
+Frames: 2696
+Panels: original | Canny edges | motion mask
+```
+
+### 4.4 输出结果
+
+```text
+advanced_analysis.mp4: 2696 帧, 30 fps, 1920x480, 时长 89.87 s, H.264, 106 MB
+```
+
+1920 = 640 × 3，正好是三个面板并排的宽度。输出视频体积较大（106 MB），
+按 `.gitignore` 规则未提交到 Git，本地路径为 `python_B/advanced_analysis.mp4`。
+
+画面证据（第 50 秒的一帧）：
+
+![Project B 输出画面](assets/python_b/advanced_analysis_frame.png)
+
+`assets/python_b/advanced_analysis_frame.png`
+
+```text
+面板0  原始视频      平均色=121.0  标准差=50.9
+面板1  Canny 边缘    平均色= 25.4  标准差=75.4   非黑像素 93528
+面板2  帧间运动      平均色=  1.4  标准差=18.5   非黑像素  4917
+```
+
+**关于运动面板大面积是黑的**：这不是程序错误。本次拍摄时摄像头对着静止的场景，
+相邻帧差异低于 `analyze_frame()` 里 `np.abs(gray - previous_gray) > 0.08` 的阈值，
+所以大部分帧的运动掩膜为空。逐帧统计可验证：
+
+```text
+帧    0 ~ 1400    运动面板非黑像素 = 0
+帧 1500           运动面板非黑像素 = 4917     <- 上面截图用的就是这一帧
+帧 2300           运动面板非黑像素 = 249
+帧 2500           运动面板非黑像素 = 1074
+其余帧                                   = 0
+```
+
+只有画面中确实出现运动的那几帧检测到了变化，说明运动检测逻辑本身工作正常。
+
+### 4.5 为什么不能用同一个环境
+
+```text
+Project A 使用的 Conda 环境: robocon_a
+Python 版本:                 3.10.21
+Project B 使用的 Conda 环境: robocon_b
+Python 版本:                 3.12.14
+```
+
+原因是两个项目在元数据里声明了**互相排斥**的版本范围，无法同时满足：
+
+| | Project A | Project B | 是否相容 |
+|---|---|---|---|
+| Python | `>=3.9,<3.11` | `>=3.12,<3.14` | ❌ 区间不相交 |
+| NumPy | `>=1.26,<2.0` | `>=2.0,<3.0` | ❌ 区间不相交 |
+
+Python 的要求是 `[3.9, 3.11)` 与 `[3.12, 3.14)`，**没有任何一个版本能同时落进两个区间**；
+NumPy 的 `1.x` 与 `2.x` 同样没有交集。作业明确不允许修改 `pyproject.toml` 里的
+`requires-python` 来绕过，所以唯一的做法就是建两个独立环境。
+
+这也是为什么不能"先把 A 跑完再把环境升级成 B"——那样会破坏 A 的环境。
+两个环境各自独立，互不影响，作业结束时两个项目都能重新运行。
+
+做完 Project B 之后回查两个环境，确认互不干扰、都还能用：
+
+```bash
+~/miniconda3/envs/robocon_a/bin/python -c "import sys, numpy, cv2; print(sys.version.split()[0], numpy.__version__, cv2.__version__)"
+~/miniconda3/envs/robocon_b/bin/python -c "import sys, numpy, skimage, imageio; print(sys.version.split()[0], numpy.__version__, skimage.__version__)"
+```
+
+```text
+robocon_a:  3.10.21   numpy 1.26.4   cv2 4.11.0
+robocon_b:  3.12.14   numpy 2.5.3    skimage 0.26.0   imageio 2.37.4
+```
+
+两个环境的 NumPy 主版本不同（1.26.4 / 2.5.3）却互不影响；
+`robocon_a` 里没有 scikit-image、`robocon_b` 里没有 OpenCV，正是项目各自的依赖预期。
+
 ## 5. C++ Manual Build
 
 ## 6. CMake Build
