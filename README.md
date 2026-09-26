@@ -174,8 +174,6 @@ CUDA Toolkit:           N/A (未安装, nvcc 不存在)
 
 ### 2.1 准备工作：安装 Conda
 
-本机原本没有 Conda，先安装 Miniconda（用户级安装，不需要 sudo）：
-
 ```bash
 curl -fL -o /tmp/miniconda.sh \
   https://mirrors.tuna.tsinghua.edu.cn/anaconda/miniconda/Miniconda3-latest-Linux-x86_64.sh
@@ -186,9 +184,6 @@ bash /tmp/miniconda.sh -b -p "$HOME/miniconda3"
 ```text
 conda 26.7.1
 ```
-
-由于到 `repo.anaconda.com` 的速度只有约 17 KB/s，安装包改从清华镜像获取（约 4.6 MB/s）。
-conda 频道与 pip 索引也一并通过 `~/.condarc` 和 `~/.config/pip/pip.conf` 指向镜像：
 
 ```yaml
 # ~/.condarc
@@ -314,7 +309,7 @@ Project A - Contours    轮廓处理图像
 
 截图说明：OpenCV 窗口默认以层叠方式出现，会互相遮挡，因此运行期间把三个窗口横向平铺
 （窗口本身不支持缩放，`WINDOW_AUTOSIZE` 设定了固定尺寸提示，故用 `--width 640 --height 480`
-让三个窗口能够并排放下）。
+让三个窗口能够并排放下）。截图时将其它无关窗口最小化，避免桌面上的其他内容干扰证据。
 
 ## 3. Process Observation
 
