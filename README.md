@@ -1171,3 +1171,98 @@ git check-ignore -v build/video_processor cpp/video_processor
 对应的关键画面已截图提交，见 `assets/python_a/`、`assets/python_b/`、`assets/cpp/`。
 
 ## 8. Problems and Notes
+
+### 8.1 环境与网络
+
+**Conda 官方源慢到不可用。** 从 `repo.anaconda.com` 下载 Miniconda 安装包速度只有约
+17 KB/s，按这个速度 150 MB 要半小时以上。改用清华镜像后达到 4.6 MB/s，41 秒完成。
+conda 频道和 pip 索引也一并指向镜像（见 2.1 节）。
+
+**镜像站不一定有你想要的东西。** 试过西安交大镜像，它的 `/anaconda/miniconda/` 和
+`/anaconda/archive/` 都是**空目录**，`/anaconda/cloud/conda-forge/linux-64/` 也是空壳，
+只有目录结构没有内容；`pkgs/` 里的包时间戳停留在 2021 年。也就是说它只镜像了 conda
+的包仓库，没有安装程序，而且内容早已停更。换镜像前最好先确认目标文件确实存在。
+
+**本机原本没有 Conda。** `conda: command not found`，且系统 Python 是 3.12.3，
+不满足 Project A 的 `>=3.9,<3.11`，所以安装 Conda 是完成 Project A 的前置条件。
+
+### 8.2 截图
+
+**`xwd` 抓不到桌面壁纸。** 最小化窗口后截图，背景是一片纯黑。实测桌面区域平均色只有
+11–30，而壁纸图片本身的平均色是 (161,145,157)。原因是 GNOME Shell (Mutter) 用 GL
+直接合成壁纸层，不经过 X 的 root window；而窗口是真正的 X window，所以**窗口抓得到、
+背景抓不到**。任何基于 `XGetImage` 的方案（包括 ffmpeg 的 x11grab）都有同样的问题。
+
+最终改用 XDG desktop portal 的 `org.freedesktop.portal.Screenshot`，由合成器内部出图：
+
+```bash
+/usr/bin/python3 -c "..."   # 通过 PyGObject 调用 portal
+```
+
+另外两条路都不通，记录备查：
+
+- `org.gnome.Shell.Screenshot` 的 D-Bus 接口在 GNOME 45+ 被限制，直接调用返回
+  `AccessDenied: Screenshot is not allowed`；
+- 模拟按 PrintScreen 键触发 GNOME 的截图 UI，实测按 Enter 后抓到的是一块 640x400 的
+  放大局部画面，不是全屏。
+
+**OpenCV 窗口不能缩放。** `cv2.imshow` 默认带 `WINDOW_AUTOSIZE`，窗口有固定尺寸提示，
+`wmctrl -e 0,x,y,w,h` 里的 `w,h` 会被忽略。用 1280x720 时窗口实际是 1280x779，
+三个横排要 3840 px 超出 2560 的屏宽，竖排又要 2337 px 超出 1600 的屏高，怎么摆都会重叠。
+最后用脚本自带的 `--width 640 --height 480` 让窗口变成 640x539，三个横排只占 1920 px，
+既有余量也不受窗口管理器偏移影响。
+
+**窗口管理器会覆盖手动摆位。** `xdotool windowmove` 移动的是 client 窗口，而带装饰的
+位置由 WM 控制，实测没生效（请求 (0,35) 实际落到 (36,68)）。换成走 EWMH 协议的
+`wmctrl -r <title> -e` 才被遵守。即便如此 WM 仍会加约 +14/+49 的偏移，所以每次都先摆位、
+再用 `wmctrl -lG` 读回实际坐标做重叠检查，确认无重叠后才截图。
+
+### 8.3 进程观察相关
+
+**PPID 会变。** 程序刚启动时 PPID 是 `113351`（启动它的 shell），运行一段时间后再采样
+变成 `3390`（systemd）。原因是原来那个父进程已经退出，`camera.py` 成为孤儿进程后被
+systemd 收养（reparent）。这是正常的内核行为，但也说明**进程观察不能只看一次快照**。
+
+**`%CPU` 超过 100% 不是异常。** `ps`/`top` 的 `%CPU` 以**单个核心为 100%** 计算，
+`camera.py` 有 48 个线程并行（`NLWP` 一列），多核累加后自然超过 100%，
+实测值 200–350 之间波动。
+
+**`pgrep -af` 会匹配到启动它的 shell。** 因为 shell 的命令行里也含有 `camera.py`
+这个字符串，所以结果里会出现两行。用 `pgrep -f` 配合更精确的模式，或在结果里人工区分。
+
+### 8.4 视频编码
+
+**OpenCV 写 MP4 依赖发行版的编码支持。** `cv2.VideoWriter` 用 `mp4v` 时，如果
+`writer.isOpened()` 返回 False，应优先检查系统 OpenCV 的编码支持，
+而不是去改图像处理逻辑——这一点 `VERSION_REQUIREMENTS.md` 也专门提示过。
+本项目在 `python_A`（`opencv-python` 4.11.0）和 C++（系统 OpenCV 4.6.0）下
+`mp4v` 均可正常写出。
+
+**Project B 的运动面板大面积为空。** 扫描整段输出后发现只有 1500、2300、2500 三帧的
+运动掩膜非空（4917 / 249 / 1074 像素），其余帧为 0。原因是拍摄时镜头对着静止场景，
+相邻帧灰度差低于 `np.abs(gray - previous_gray) > 0.08` 的阈值。
+这是检测逻辑的正确行为，不是程序缺陷——让画面里真的有东西动起来就会出现结果。
+
+**二值化面板在有损压缩后仍保持二值。** 从 `cpp_processed.mp4` 抽帧后检查 Otsu 面板的
+灰度直方图，0–31 区间占 48.44%、224–255 区间占 51.56%、中间区间 **0%**，
+说明 mp4v 的有损压缩没有在二值边界上引入中间灰度。
+
+### 8.5 Git 相关
+
+**`git branch` 在空仓库上不可用。** 如果仓库还没有任何提交，`git branch dev` 会报
+`fatal: not a valid object name`。需要先完成第一次提交再建分支。
+
+**远端已有 README 时不能直接推。** 创建 GitHub 仓库时勾了 "Add a README file"，
+远端 `main` 上有一个自动生成的 `Initial commit`，与本地骨架提交没有共同祖先。
+没有用 `--force` 覆盖远端，而是先 `git fetch` 再把本地提交 rebase 到远端提交之上
+（见 7.4 节）。
+
+**`.gitignore` 不会自动覆盖编译产物。** starter 提供的 `.gitignore` 只忽略
+`build/`、`cmake-build-*/`、`*.o`、`*.out`，而手工编译出的可执行文件叫
+`video_processor`，不在其中——`git status` 里它一度作为未跟踪文件出现，
+差点被提交上去。已补充规则 `cpp/video_processor`。
+
+**`git check-ignore` 对带斜杠的目录模式有陷阱。** `.gitignore` 里的 `build/` 只匹配
+目录。在 `build/` 尚不存在时执行 `git check-ignore build` 会返回未忽略，
+容易误判规则失效；等目录真实存在（或检查具体文件如 `build/video_processor`）才准确。
+
