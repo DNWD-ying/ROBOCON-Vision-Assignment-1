@@ -134,25 +134,65 @@ nvcc --version
 ```
 
 ```text
-/bin/bash: 行 76: nvcc: 未找到命令
+nvcc: NVIDIA (R) Cuda compiler driver
+Copyright (c) 2005-2025 NVIDIA Corporation
+Built on Fri_Feb_21_20:23:50_PST_2025
+Cuda compilation tools, release 12.8, V12.8.93
+Build cuda_12.8.r12.8/compiler.35583870_0
+```
+
+**CUDA Toolkit 的安装方式**
+
+```bash
+# 1. 添加 NVIDIA 官方仓库
+wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/x86_64/cuda-keyring_1.1-1_all.deb
+sudo dpkg -i cuda-keyring_1.1-1_all.deb
+sudo apt update
+
+# 2. 安装（包名必须是 cuda-toolkit-12-8，不能写成 cuda 或 cuda-12-8）
+sudo apt install cuda-toolkit-12-8
+```
+
+**为什么包名必须写全 `cuda-toolkit-12-8`**
+
+`cuda` 和 `cuda-12-8` 这两个元包会连带安装 `cuda-drivers`。而 NVIDIA 仓库里的
+`cuda-drivers` 版本是 **550.90.07**，低于本机已安装的 **595.91.07** —— 一旦装上
+就会把驱动**降级**，直接破坏当前可用的图形会话。`cuda-toolkit-*` 系列只把编译器
+和库装到 `/usr/local/cuda-12.8`，不触碰驱动。
+
+安装前后的实际状态：
+
+```text
+安装包数量:   62 个（0 个卸载、0 个升级）
+下载体积:     3.36 GB
+nvcc 位置:    /usr/local/cuda-12.8/bin/nvcc
+符号链接:     /usr/local/cuda -> /etc/alternatives/cuda -> /usr/local/cuda-12.8
+驱动版本:     595.91.07（安装前后一致，未被改动）
 ```
 
 - NVIDIA Driver：**595.91.07**
-- CUDA Toolkit：**N/A（未安装）**
+- CUDA Toolkit：**12.8（V12.8.93）**
 
 **必须区分的两点：**
 
 | 项目 | 值 | 含义 |
 |---|---|---|
 | NVIDIA Driver 支持的 CUDA 能力 | 13.2 | `nvidia-smi` 右上角显示的 `CUDA Version`，指这个驱动**最高能支持**的 CUDA 运行时版本，是驱动的能力上限 |
-| 实际安装的 CUDA Toolkit | 无 | `nvcc` 命令不存在，说明本机**没有安装** CUDA Toolkit |
+| 实际安装的 CUDA Toolkit | 12.8 | `nvcc --version` 报告 **V12.8.93**，这是本机**实际安装**的编译器版本 |
 
 `nvidia-smi` 里的 `CUDA Version: 13.2` **不能**等价为"本机已经安装了 CUDA 13.2 的 Toolkit"。
 前者是驱动自带的能力声明，后者需要实际安装 `cuda-toolkit` 并具备 `nvcc` 编译器；
-本机只满足前者。
+本机现在**两者都有，但版本不同**：驱动能力上限是 13.2，实际安装的 Toolkit 是 12.8。
+这两个数字不一致属于正常情况 —— 驱动向下兼容，12.8 的 Toolkit 在支持到 13.2 的驱动上可以正常工作。
+
+**为什么选 12.8 而不是更新的 13.x**
+
+本机 GPU 为 RTX 5070 Ti（Blackwell 架构，计算能力 `sm_120`）。
+CUDA 12.8 是**第一个支持 Blackwell 的版本**；13.x 虽然更新，但当前多数深度学习框架
+尚未跟进。选 12.8 在兼容性上更稳妥。
 
 对本 Assignment 而言，C++ 部分只需要 OpenCV 与 Eigen 的 CPU 版本，
-**不依赖 CUDA Toolkit**，因此这一项缺失不影响后续任务。
+**并不依赖 CUDA Toolkit** —— 这一项属于运行环境记录的一部分。
 
 ### 1.6 汇总
 
@@ -165,7 +205,7 @@ GPU:                    Intel Raptor Lake-S UHD Graphics (集显)
 GPU 正在使用的内核驱动:   i915 (Intel) / nvidia (NVIDIA)
 图形会话类型:            X11  (DISPLAY=:1, WAYLAND_DISPLAY 为空)
 NVIDIA Driver:          595.91.07
-CUDA Toolkit:           N/A (未安装, nvcc 不存在)
+CUDA Toolkit:           12.8 (V12.8.93, /usr/local/cuda-12.8)
 内存:                   31 GiB
 架构:                   x86_64
 ```
