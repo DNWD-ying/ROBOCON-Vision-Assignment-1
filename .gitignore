@@ -20,5 +20,11 @@ cpp/video_processor
 *.mp4
 *.avi
 
+# Assignment 3 (YOLO) 训练产物与数据集缓存，不进仓库
+Assignment3_YOLO/runs/
+Assignment3_YOLO/datasets/
+Assignment3_YOLO/weights/
+Assignment3_YOLO/yolo11n.pt
+
 # OS
 .DS_Store
